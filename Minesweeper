@@ -1,0 +1,308 @@
+package hobinca;
+
+import java.io.File;
+import java.util.Random;
+
+import javafx.application.Application;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.Scene;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Alert.AlertType;
+import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.ContentDisplay;
+import javafx.scene.control.Label;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+import javafx.scene.input.MouseButton;
+import javafx.scene.layout.GridPane;
+import javafx.scene.layout.VBox;
+import javafx.scene.media.AudioClip;
+import javafx.scene.paint.Color;
+import javafx.scene.text.Font;
+import javafx.scene.text.FontWeight;
+import javafx.stage.Stage;
+
+public class MineSweeper  extends Application {
+	//Constants ---------------------------------------------------------------------
+	public static final int MINE = -1;
+	public static final int FIELD_COLS = 15;
+	public static final int FIELD_ROWS = 15;
+	public static final int TOTAL_MINES = 30;
+	public static final Image FLAG = new Image("file:images/hobinca/flag.png", 12, 12, false, true);
+	public static final Image BOMB = new Image("file:images/hobinca/bomb.png", 12, 12, false, true);
+	public static final Random RNG = new Random();
+	public static final AudioClip bombClip = new AudioClip(new File("sounds/hobinca/bomb.wav").toURI().toString());
+
+	//Class Variables ---------------------------------------------------------------
+	private int[][] mineField = new int[FIELD_COLS][FIELD_ROWS];
+	private boolean gameOver = false;
+	private int areasSwept = 0;
+
+	//--Interface components:
+	private Button[][] mineFieldButtons = new Button[FIELD_COLS][FIELD_ROWS];
+
+	//Constructor -------------------------------------------------------------------
+	public MineSweeper () {
+		newMineField();
+	}
+
+	//Methods -----------------------------------------------------------------------
+	/**
+	 * Create and display the main interface
+	 */
+	public void start(Stage primaryStage) throws Exception {
+
+		//Title Label
+		Label title = new Label("Minesweeper");
+		title.setFont(Font.font("Playbill", 50));
+		title.setTextFill(Color.DARKGRAY);
+
+		//New Game Button
+		Button newGame = new Button("New Game");
+		newGame.setFont(Font.font("Aharoni" , 20));
+		newGame.setOnAction(e -> newGame());
+
+		//Grid of Buttons for the game MineField
+		GridPane grid = new GridPane();
+
+		for (int col = 0; col < FIELD_COLS; col++) {
+			for (int row = 0; row < FIELD_ROWS; row++) {
+				mineFieldButtons[col][row] = new Button();
+				mineFieldButtons[col][row].setPrefSize(30, 30);
+				mineFieldButtons[col][row].setAlignment(Pos.CENTER);
+				mineFieldButtons[col][row].setFont(Font.font("Verdana", FontWeight.BOLD, 12));
+				mineFieldButtons[col][row].setFocusTraversable(false);
+
+				final int actionCol = col;
+				final int actionRow = row;
+				mineFieldButtons[col][row].setOnMouseClicked(m -> processMouseEvent(actionCol, actionRow, m.getButton()));
+
+				grid.add(mineFieldButtons[col][row], col, row);
+			}
+		}
+
+		VBox root = new VBox(title, grid, newGame);
+		root.setPadding(new Insets (10));
+		root.setSpacing(10);
+		root.setAlignment(Pos.CENTER);
+
+		Scene scn = new Scene(root);
+		primaryStage.setScene(scn);
+		primaryStage.setTitle("Minesweeper");
+		primaryStage.show();
+	}
+
+	/**
+	 * Process Button clicks.  
+	 * The user may press with the primary button to sweep for mines at this location
+	 * or may press the secondary button (right) to flag this location.  
+	 * Flagging a location will prevent accidental sweeps of the location.
+	 * Right clicking on a flagged location will clear the flag.
+	 * 
+	 * Button presses are not processed if the game is over.
+	 * 
+	 * @param col
+	 * @param row
+	 * @param b		what button was pressed to cause the event
+	 */
+	public void processMouseEvent(int col, int row, MouseButton b) {
+
+		if (!gameOver) {
+			if (b == MouseButton.PRIMARY) {
+				//Sweep that space
+				sweepMines(col, row);
+
+				if (areasSwept == FIELD_COLS * FIELD_ROWS -TOTAL_MINES) {
+					gameOver("You cleared all the mines! Well Done! ", "Victory!", "Victory!", new ImageView(FLAG));
+				}
+			}
+
+			else if (b == MouseButton.SECONDARY) {
+				//Set a flag on that space
+
+				if (!mineFieldButtons[col][row].getText().equals("F")) {
+					mineFieldButtons[col][row].setText("F");
+					mineFieldButtons[col][row].setGraphic(new ImageView(FLAG));
+					mineFieldButtons[col][row].setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
+				}
+
+				else {
+					mineFieldButtons[col][row].setText("");
+					mineFieldButtons[col][row].setGraphic(null);
+					mineFieldButtons[col][row].setContentDisplay(ContentDisplay.TEXT_ONLY);
+				}
+			}
+		}
+	}
+
+	/**
+	 * Sweep for mines at the given location.
+	 * If there is a mine located at this location, the player loses.  Otherwise, the button reveals how many mines are adjacent
+	 * to this particular location.
+	 * @param col 	column of the mineField being searched
+	 * @param row 	row of the mineField being searched
+	 */
+	public void sweepMines(int col, int row) {
+
+		if (col < 0 || col >= FIELD_COLS) return;
+		if (row < 0 || row >= FIELD_ROWS) return;
+		if (mineFieldButtons[col][row].isDisable()) return;
+		if (mineFieldButtons[col][row].getText().equals("F")) return;
+
+		if (mineField[col][row] == MINE) {
+			//You lose
+			mineFieldButtons[col][row].setStyle("-fx-base: red");
+			
+			bombClip.play();
+			
+			gameOver("You set off a mine!", "Game Over!", "Kaboom!", new ImageView(BOMB));
+		}
+
+		else {
+
+			//Show how many mines are adjacent to this space
+			mineFieldButtons[col][row].setDisable(true);
+
+			if (mineField[col][row] != 0 ) {
+				mineFieldButtons[col][row].setText("" + mineField[col][row]);
+				mineFieldButtons[col][row].setContentDisplay(ContentDisplay.TEXT_ONLY);
+			}
+
+			//Update the count of areasSwept
+			areasSwept++;
+
+			if (mineField[col][row] == 0 ) {
+				sweepMines(col - 1, row - 1);
+				sweepMines(col - 1, row);
+				sweepMines(col - 1, row + 1);
+
+				sweepMines(col, row - 1);
+				sweepMines(col, row + 1);
+
+				sweepMines(col + 1, row - 1);
+				sweepMines(col + 1, row);
+				sweepMines(col + 1, row + 1);
+
+			}
+		}
+	}
+
+
+	/**
+	 * When the game ends because the player hit a mine or cleared the board:
+	 *  - change game state to gameOver
+	 *  - reveal the mines
+	 *  - display a message to the screen telling the player why the game has ended
+	 */
+	public void gameOver(String message, String title, String button, ImageView icon) {
+
+		gameOver = true;
+		revealAllBombs();
+
+		Alert msg = new Alert (AlertType.NONE);
+		msg.setHeaderText(null);
+		msg.setTitle(title);
+		msg.setContentText(message);
+		msg.getButtonTypes().add(new ButtonType (button));
+		msg.setGraphic(icon);
+		msg.showAndWait();
+
+	}
+
+	/**
+	 * reveals the location of all bombs (after the game ends)
+	 */
+	public void revealAllBombs() {
+		for (int col = 0; col < FIELD_COLS; col++) {
+			for (int row = 0; row < FIELD_ROWS; row++) {
+				if (mineField[col][row] == MINE) {
+					mineFieldButtons[col][row].setGraphic(new ImageView (BOMB));
+					mineFieldButtons[col][row].setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
+				}
+			}
+		}
+	}
+
+	/**
+	 * Create new randomized locations for the mines
+	 */
+	public void newMineField() {
+		//zero out any old mine field that my be stored
+		for (int col = 0; col < FIELD_COLS; col++) {
+			for (int row = 0; row < FIELD_ROWS; row++)
+				mineField[col][row] = 0;
+		}
+
+		//hide new mines within the field
+		int hiddenMines = 0;
+		while (hiddenMines < TOTAL_MINES) {
+			int col = RNG.nextInt(FIELD_COLS);
+			int row = RNG.nextInt(FIELD_ROWS);
+
+			if (mineField[col][row] != MINE) {
+				mineField[col][row] = MINE;
+				hiddenMines++;
+			}
+		}
+
+		//calculate all the hint values
+		for (int col = 0; col < FIELD_COLS; col++) {
+			for (int row = 0; row < FIELD_ROWS; row++) {
+				if (mineField[col][row] != MINE) {
+					mineField[col][row] = countMinesNear (col, row);
+				}
+			}
+		}
+	}
+
+	public int countMinesNear(int col, int row) {
+		int mineCount = 0;
+
+		if (col > 0 && row > 0 && mineField[col - 1][row - 1] == MINE) mineCount++;
+		if (col > 0 && mineField[col - 1][row] == MINE) mineCount++;
+		if (col > 0 && row + 1 < FIELD_ROWS && mineField[col - 1][row + 1] == MINE) mineCount++;
+		if (row > 0 && mineField[col][row - 1] == MINE) mineCount++;
+		if (row + 1 < FIELD_ROWS && mineField[col][row + 1] == MINE) mineCount++;
+		if (col + 1 < FIELD_COLS && row > 0 && mineField[col + 1][row - 1] == MINE) mineCount++;
+		if (col + 1 < FIELD_COLS && mineField[col + 1][row] == MINE) mineCount++;
+		if (col + 1 < FIELD_COLS && row + 1 < FIELD_ROWS && mineField[col + 1][row + 1] == MINE) mineCount++;
+
+		return mineCount;
+	}
+
+	/**
+	 * Create a new game by 
+	 *  - resetting all mine field buttons
+	 *  - creating a new mine field 
+	 *  - resetting the gameOver and areasSwept variables 
+	 */
+	public void newGame() {
+		//reset all the mine variables
+		for (int col = 0; col < FIELD_COLS; col++) {
+			for (int row = 0; row < FIELD_ROWS; row++) {
+				mineFieldButtons[col][row].setText("");
+				mineFieldButtons[col][row].setGraphic(null);
+				mineFieldButtons[col][row].setContentDisplay(ContentDisplay.TEXT_ONLY);
+				mineFieldButtons[col][row].setDisable(false);
+				mineFieldButtons[col][row].setStyle(null);
+			}
+		}
+
+		//create mine field
+		newMineField();
+
+		//reset the game state
+		gameOver = false;
+		areasSwept = 0;
+	}
+
+	/**
+	 * Launch the JavaFX application framework
+	 */
+	public static void main(String[] args) {
+		launch(); 
+	}
+
+}
